@@ -1,0 +1,108 @@
+# Your beats. Two mechanisms use this file:
+#   1. edit.py tags and ranks the day's whole corpus against these topics
+#   2. fetch.py runs the `queries` below as live searches beyond the corpus
+#
+# A topic with `editions: [weekend]` only runs its queries on Saturdays and is
+# only shown to the weekend editor; no `editions` key means every edition.
+#
+# Keep queries few and sharp. Five loose queries beat thirty noisy ones.
+# Results are deduped against the main corpus by URL, and against seen.json
+# so nothing resurfaces inside the cooldown window.
+
+radar:
+  max_items: 8          # size of the "On your radar" front-of-book page
+  cooldown_days: 7      # don't resurface the same URL within this window
+
+topics:
+  - id: aus-economy
+    name: "Australian economy"
+    description: >
+      RBA rates and policy, inflation and CPI, labour force, housing,
+      federal budget and fiscal policy, the AUD, major domestic company news.
+    queries:
+      - engine: google_news
+        q: '(RBA OR "Reserve Bank of Australia") (rates OR inflation OR CPI)'
+      - engine: google_news
+        q: 'Australian economy (GDP OR "labour force" OR unemployment OR budget)'
+      - engine: guardian
+        q: 'australian economy OR reserve bank'
+    exclude: ["horoscope", "sport"]
+
+  - id: ai-business
+    name: "AI and the business of AI"
+    description: >
+      Model releases and capability claims, funding rounds and valuations,
+      chip supply and datacentre buildout, enterprise adoption, unit economics,
+      regulation. Business and strategy over research minutiae.
+    queries:
+      - engine: google_news
+        q: '(Anthropic OR OpenAI OR "Google DeepMind" OR Nvidia) (funding OR revenue OR earnings OR launch)'
+      - engine: google_news
+        q: '"AI datacentre" OR "AI data center" (investment OR power OR capacity)'
+      - engine: hackernews
+        q: 'AI enterprise adoption'
+        min_points: 150
+    exclude: ["AI girlfriend", "prompt hack"]
+
+  - id: energy-transition
+    name: "Renewable energy and the energy transition"
+    description: >
+      Solar, wind, storage and grid. Australian NEM and CIS auctions,
+      transmission buildout, PPAs and project finance, curtailment,
+      BESS and OEM landscape, forecasting and resource assessment.
+    queries:
+      - engine: google_news
+        q: '(Australia OR NEM) (renewable OR solar OR wind OR "battery storage") (project OR auction OR grid)'
+      - engine: google_news
+        q: '"energy transition" (investment OR policy OR transmission)'
+      - engine: guardian
+        q: 'renewable energy transition'
+    exclude: []
+
+  - id: climate-disasters
+    name: "Climate change and natural disasters"
+    description: >
+      Climate science and attribution, emissions and policy, COP process,
+      and active natural disasters — bushfire, flood, cyclone, heatwave —
+      with Australian and Tasmanian events weighted highest.
+    queries:
+      - engine: google_news
+        q: 'Australia (bushfire OR flood OR cyclone OR heatwave) warning'
+      - engine: google_news
+        q: 'climate (attribution OR emissions OR IPCC OR COP) study'
+      - engine: guardian
+        q: 'climate crisis australia'
+    exclude: []
+
+  # Owner, 2026-09-29: weekend only. The Weekend Brief gives it its own
+  # "The World This Week" section (weekend.py); weekdays are unchanged.
+  - id: world-politics
+    name: "World news and global politics"
+    editions: [weekend]
+    description: >
+      Geopolitics and diplomacy, wars and ceasefires, elections and changes
+      of government, summits, sanctions and trade disputes, the UN and
+      multilateral bodies — what moved between countries this week and what
+      it means for Australia and the region.
+    queries:
+      - engine: google_news
+        q: '(ceasefire OR sanctions OR summit OR "UN Security Council" OR election) world leaders'
+      - engine: guardian
+        q: 'diplomacy OR geopolitics OR "foreign policy"'
+    exclude: ["sport"]
+
+engines:
+  google_news:
+    # Arbitrary keyword -> feed. The workhorse.
+    url_template: "https://news.google.com/rss/search?q={q}&hl=en-AU&gl=AU&ceid=AU:en"
+    max_per_query: 6
+    window_hours: 30
+  guardian:
+    # Same free API key as the main Guardian source.
+    exclude_sections: [sport, football]   # Guardian sectionIds kept out of topic searches
+    max_per_query: 5
+    window_hours: 30
+  hackernews:
+    # Algolia API, free, no auth.
+    url_template: "https://hn.algolia.com/api/v1/search_by_date?query={q}&tags=story&numericFilters=created_at_i>{since}"
+    max_per_query: 4

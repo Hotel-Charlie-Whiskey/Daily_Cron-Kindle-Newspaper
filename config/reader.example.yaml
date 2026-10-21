@@ -1,0 +1,19 @@
+# Who the paper is for. The editor prompts (edit.py, weekend.py) and the
+# schedule gate (.github/workflows/daily.yml) read this file, so the rest of
+# the pipeline stays reader-agnostic.
+
+# One line, finishing "Your reader is ..."
+reader: "a curious generalist who wants the day's news in depth, not breadth"
+
+# IANA name. Decides which day is Saturday, and which of the workflow's
+# crons is the live one — keep the crons in daily.yml in step with it.
+timezone: Australia/Sydney
+
+# How the editor weighs proximity when ranking.
+proximity: "Australian news outranks equivalent news elsewhere"
+
+# Whose angle the Weekend Brief's world section takes ("what it means for ...").
+home: "Australia and the region"
+
+# Anything the editor drops everywhere, or leave blank for nothing.
+avoid: ""

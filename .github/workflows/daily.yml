@@ -1,0 +1,236 @@
+name: Daily Brief
+
+on:
+  schedule:
+    # GitHub cron is fixed UTC, so where the reader's timezone
+    # (config/reader.yaml) observes DST, one cron can't hit 05:40 local time
+    # year-round. One cron per offset instead, and the `gate` job below works
+    # out which offset is currently in force and only lets the matching
+    # firing through — the other one exits clean (green, not failed) rather
+    # than delivering the paper an hour off. Without DST, keep a single cron.
+    # Changing these? Update SCHEDULES below to match.
+    #
+    # This slot matters more than it looks: the editorial pass draws on your
+    # Pro subscription quota, so run it while you are asleep and not competing
+    # with your own Claude Code sessions.
+    - cron: "40 18 * * *"   # 05:40 AEDT (UTC+11, Oct-Apr)
+    - cron: "40 19 * * *"   # 05:40 AEST (UTC+10, Apr-Oct)
+  workflow_dispatch:
+    inputs:
+      edition:
+        description: "auto = Weekend Brief on Saturdays, Daily Brief otherwise"
+        type: choice
+        options: [auto, daily, weekend]
+        default: auto
+
+# One line per cron above: "<cron>=<the UTC offset it is right for>", as
+# `date +%z` prints it in the reader's timezone.
+env:
+  SCHEDULES: |
+    40 18 * * *=+1100
+    40 19 * * *=+1000
+
+# RUN THIS FROM A PRIVATE REPO. The run artifacts carry the full-text PDF and
+# the commit step publishes the week's syntheses to state/week/ — on a public
+# repo that is publication, a different thing from a personal copy. The
+# `gate` job refuses to build on a public repo.
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-brief
+  cancel-in-progress: false
+
+jobs:
+  # Decides whether today's firing is the "real" one for the reader's current
+  # offset (there are two scheduled firings a day, ~1h apart, and exactly one
+  # of them is correct for the current season) and whether it's also the
+  # Monday run that should carry the weekly feed-maintenance job.
+  #
+  # Deliberately compares the *cron string* to the *current* offset, not the
+  # wall-clock hour: GitHub can fire a scheduled run late under load, and by
+  # the time it starts an hour-of-day check could disagree with which cron
+  # actually fired. `github.event.schedule` records which cron fired, so
+  # that's what gets matched against the live TZ offset instead.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.check.outputs.run }}
+      weekly: ${{ steps.check.outputs.weekly }}
+    steps:
+      - name: Refuse to build on a public repo
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$(gh api "repos/${{ github.repository }}" --jq .private)" != "true" ]; then
+            echo "::error::This repo is public. Run the paper from a private copy — see README, Setup step 1."
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: config/reader.yaml
+          sparse-checkout-cone-mode: false
+
+      - name: Match today's cron firing to the reader's current offset
+        id: check
+        run: |
+          tz=$(sed -n 's/^timezone:[[:space:]]*//p' config/reader.yaml | sed 's/[[:space:]]*#.*//' | tr -d "\"' \r")
+          if [ -z "$tz" ]; then
+            echo "::error::config/reader.yaml has no timezone"
+            exit 1
+          fi
+
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            # workflow_dispatch always runs, and is never the weekly trigger.
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "weekly=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          offset=$(TZ="$tz" date +%z)
+          cron="${{ github.event.schedule }}"
+          run=false
+          while IFS='=' read -r c o; do
+            if [ "$c" = "$cron" ] && [ "$o" = "$offset" ]; then
+              run=true
+            fi
+          done <<< "$SCHEDULES"
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+
+          # Weekly maintenance rides along on the Monday build. Gate it on
+          # $run too, not just the weekday: both daily crons fire every
+          # Monday (one per offset), and without this a stray "wrong season"
+          # firing would compute the same weekday and queue a second,
+          # duplicate feed-repair PR alongside the real one.
+          weekly=false
+          if [ "$run" = "true" ] && [ "$(TZ="$tz" date +%u)" = "1" ]; then
+            weekly=true
+          fi
+          echo "weekly=$weekly" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: gate
+    if: needs.gate.outputs.run == 'true'
+    runs-on: ubuntu-latest
+    # Fetch+extract alone runs ~6 min (Reddit is paced 65s between 4
+    # subreddits), and edit.TIMEOUT_SEC is 1200s — a real editorial pass took
+    # ~8 min in testing. 30 min never gave the pipeline a chance to finish.
+    # Saturday's weekend pass reads the whole week and writes much longer
+    # syntheses; weekend.TIMEOUT_SEC gives it 1800s on its own.
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: typst-community/setup-typst@v3
+        with:
+          # Pinned: the template's label/pageref/outline behaviour (the
+          # Scribe's Contents panel depends on it) was only ever verified
+          # against 0.15.1. Bump deliberately, not via `latest`.
+          typst-version: 0.15.1
+
+      - name: Install Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          # Fallback if the installer moves:
+          #   npm install -g @anthropic-ai/claude-code
+
+      - name: Verify Claude Code is on PATH
+        # GITHUB_PATH only takes effect in later steps, so this is the
+        # earliest point that can confirm the install actually worked.
+        run: claude --version
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Restore extraction cache
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: extract-${{ github.run_id }}
+          restore-keys: extract-
+
+      - name: Build and deliver
+        env:
+          # Subscription auth. Generate once with `claude setup-token`.
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          GUARDIAN_API_KEY: ${{ secrets.GUARDIAN_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          KINDLE_EMAIL: ${{ secrets.KINDLE_EMAIL }}
+          # Scheduled runs have no inputs, so this is "auto" there.
+          EDITION: ${{ inputs.edition || 'auto' }}
+          # SMTP_PORT intentionally not set here — there's no clean way to
+          # give a secrets-backed env var a default via ${{ }}, and
+          # deliver.py already falls back to 587 when it's unset.
+        run: python src/build.py
+
+      - name: Commit seen-URL state and the week's archive
+        # Only push when this is the run actually building on the default
+        # branch — a manual dispatch from a feature branch shouldn't push
+        # seen-URL state back to it. (success() is spelled out because
+        # adding any `if:` here overrides the implicit success()-only
+        # default.)
+        if: success() && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name  "scribe-daily"
+          git config user.email "actions@github.com"
+          git add -A state/        # seen.json, plus the week archive incl. pruned days
+          git diff --staged --quiet || git commit -m "state: $(date -u +%F)"
+          git push
+
+      - name: Keep today's paper and the editor transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-brief
+          path: |
+            out/*.pdf
+            build/edit-response.txt
+            build/edit-envelope.json
+            build/edit-stderr.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+  # Weekly: let an agent fix what the deterministic pipeline cannot. Runs
+  # even if `build` failed — a broken feed is often exactly why it did.
+  maintain:
+    needs: [gate, build]
+    if: always() && needs.gate.outputs.weekly == 'true'
+    runs-on: ubuntu-latest
+    # Job-level, since it opens a PR: the top-level `contents: write` alone
+    # doesn't cover pull-requests, and giving every job pull-request access
+    # by default would be broader than build/gate need.
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Feed health check
+        id: check
+        # set -o pipefail: without it, `tee`'s own exit code (always 0)
+        # masks a failing check_feeds.py, and the claude-code-action step
+        # below keys off this step's outcome to decide whether to run.
+        run: set -o pipefail; python scripts/check_feeds.py | tee feed-report.txt
+        continue-on-error: true
+      - uses: anthropics/claude-code-action@v1
+        if: steps.check.outcome == 'failure'
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--model claude-sonnet-5 --max-turns 12"
+          prompt: >
+            Read feed-report.txt. For each failing feed, find the publisher's
+            current feed URL, update config/feeds.yaml, and open a PR titled
+            "fix: feed URLs". If a publisher has removed feeds entirely, comment
+            the entry out and say so in the PR body rather than guessing.
