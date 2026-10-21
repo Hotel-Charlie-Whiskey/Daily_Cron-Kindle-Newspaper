@@ -190,8 +190,8 @@ def fetch_guardian(src: dict, defaults: dict, query: str | None = None,
         # e.g. match reports (a "Nations League" result once made the radar).
         if exclude_sections:
             params["section"] = ",".join(f"-{s}" for s in exclude_sections)
-    elif src.get("edition"):
-        params["section"] = "australia-news|business|environment|world|technology"
+    elif src.get("sections"):
+        params["section"] = src["sections"]
 
     resp = requests.get("https://content.guardianapis.com/search", params=params,
                         timeout=defaults["request_timeout_sec"])
@@ -202,7 +202,7 @@ def fetch_guardian(src: dict, defaults: dict, query: str | None = None,
         f = r.get("fields", {})
         # Topic-search calls (radar) pass a src dict with no section_map and
         # must stay "radar" regardless of sectionId; only a configured
-        # section_map (guardian-au) redirects by Guardian sectionId.
+        # section_map (e.g. guardian-au) redirects by Guardian sectionId.
         section = src.get("section_map", {}).get(r.get("sectionId"), src["section"])
 
         # Live blogs concatenate timestamped blocks, not article prose — a

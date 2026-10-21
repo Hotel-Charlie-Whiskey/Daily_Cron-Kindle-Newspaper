@@ -11,14 +11,15 @@ from pathlib import Path
 
 import feedparser
 import requests
-import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+
+import sources  # noqa: E402
 
 
 def main() -> int:
     sys.stdout.reconfigure(encoding="utf-8")
-    cfg = yaml.safe_load(Path("config/feeds.yaml").read_text(encoding="utf-8"))
+    cfg = sources.load()
     ua = cfg["defaults"]["user_agent"]
     failures = []
 

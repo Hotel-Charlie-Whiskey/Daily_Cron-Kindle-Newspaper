@@ -549,11 +549,11 @@ def mechanical_plan(articles: list[Article], radar_max: int, chatter_max: int) -
     grouped by source, one mechanically-chosen full-text article per source.
     Plain, but it arrives.
 
-    Sources come out in feeds.yaml registry order "for free": fetch.py walks
+    Sources come out in feeds.yaml selection order "for free": build.py walks
     config/feeds.yaml sources top to bottom and appends each source's
     articles in one block, and dedupe() and extract_all() are both
     order-preserving, so first-appearance order in `articles` already *is*
-    registry order by the time this runs. No feeds.yaml reference needed here.
+    selection order by the time this runs. No feeds.yaml reference needed here.
     """
     for a in articles:
         a.digest = _truncate(_clean_text(a.summary_raw), max_chars=320)

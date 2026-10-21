@@ -1,150 +1,53 @@
-# Feed registry for the daily Scribe paper.
-# VERIFY BEFORE FIRST RUN:  python scripts/check_feeds.py
-# Publishers move feed URLs without notice. check_feeds fails loudly rather
-# than letting the build ship a thin paper.
-
-defaults:
-  # No email in the UA: NPR tarpits any UA containing an address (tested
-  # 2026-09-28: 25 s read timeouts with one, 0.3 s without).
-  user_agent: "scribe-daily/1.0 (personal e-reader digest)"
-  per_domain_delay_sec: 1.0
-  request_timeout_sec: 20
+# Your sources — what goes into your paper. Make this list yours.
+#
+# Three ways to list a source:
+#
+#   1. A catalogue id, as-is. config/catalogue.yaml holds the definitions
+#      (feed URL, extraction route, licence, quirks) for sources that are
+#      known to read well:
+#
+#        - bbc-world
+#
+#   2. A catalogue id with overrides — anything you set replaces the
+#      catalogue's value for that field:
+#
+#        - id: bbc-world
+#          section: news
+#          max_items: 6
+#
+#   3. A source of your own, defined in full (an id not in the catalogue):
+#
+#        - id: my-local-paper
+#          name: "The Local Paper"
+#          section: local
+#          kind: rss
+#          url: "https://example.com/feed/"
+#          max_items: 8
+#          extract: trafilatura
+#
+#      Field reference is at the top of config/catalogue.yaml.
+#
+# `section` is a free label the editor sees — use whatever words suit your
+# paper, except `radar` and `reddit`, which are reserved.
+#
+# Order matters only for the automatic (fallback) edition, which lists
+# sources top to bottom.
+#
+# VERIFY AFTER ANY CHANGE:  python scripts/check_feeds.py
 
 sources:
-  # --- Australia -------------------------------------------------------
-  - id: abc-au
-    name: "ABC News"
-    section: australia
-    kind: rss
-    url: "https://www.abc.net.au/news/feed/51120/rss.xml"   # "Just In"
-    max_items: 14
-    extract: trafilatura
+  - abc-au
+  - guardian-au           # needs GUARDIAN_API_KEY
+  - pulse-tas
+  - bbc-world
+  - aljazeera
+  - npr
+  - dw
+  - theverge
+  - daringfireball
+  - conversation-au
 
-  - id: guardian-au
-    name: "The Guardian Australia"
-    section: australia
-    kind: guardian_api        # full body text via Open Platform, no scraping
-    edition: au
-    max_items: 14
-    # This source's own section covers australia-news|business|environment|
-    # world|technology, so it also carries UK/world stories (Heathrow, the
-    # Pope) — file those by Guardian sectionId instead of dumping everything
-    # under australia. Unmapped sectionIds (business, environment) fall
-    # through to the source's own `section` above.
-    section_map:
-      world: world
-      technology: technology
-
-  # 2026-09-29: added at the owner's request. Hobart-based, independent,
-  # free to read. Its URLs (/news/author/…, /news/region/…) look like
-  # WordPress, so this is WordPress's standard site feed — UNVERIFIED from the dev sandbox (no egress): run check_feeds before
-  # trusting it. If it 404s, comment it out rather than guessing another URL.
-  - id: pulse-tas
-    name: "Pulse Tasmania"
-    section: australia
-    kind: rss
-    url: "https://pulsetasmania.com.au/feed/"
-    max_items: 8
-    extract: trafilatura
-
-  # 2026-09-29: owner asked for Reuters. Not added: Reuters dropped its
-  # public RSS in June 2020, reuters.com is bot-gated, and it has no free
-  # API. Google News "source:reuters" links are redirects that can't be
-  # extracted, so it could only ever be headlines. Revisit if that changes.
-
-  # --- World -----------------------------------------------------------
-  - id: bbc-world
-    name: "BBC News"
-    section: world
-    kind: rss
-    url: "https://feeds.bbci.co.uk/news/world/rss.xml"
-    max_items: 10
-    extract: trafilatura
-
-  # 2026-09-28: disabled. rsshub.app mirror returns 403; AP's own
-  # apnews.com/index.rss is bot-gated (401/403) and AP offers no free API.
-  # No first-party replacement exists.
-  # - id: ap-top
-  #   name: "AP News"
-  #   section: world
-  #   kind: rss
-  #   url: "https://rsshub.app/apnews/topics/apf-topnews"
-  #   # AP's own public feeds are unreliable. If this mirror dies, drop AP and
-  #   # lean on a Google News query feed with source:apnews.com instead.
-  #   max_items: 8
-  #   extract: trafilatura
-
-  - id: aljazeera
-    name: "Al Jazeera English"
-    section: world
-    kind: rss
-    url: "https://www.aljazeera.com/xml/rss/all.xml"
-    max_items: 8
-    extract: trafilatura
-
-  # 2026-09-29: re-enabled at the owner's request. The 2026-09-28 failure
-  # was every page gated as "boilerplate": link density is measured over the
-  # whole fetched page, and npr.org's page is mostly nav. Rather than loosen
-  # the gate, extraction now fetches the same story from text.npr.org —
-  # NPR's own text-only edition, which has almost no chrome — while links
-  # and QR codes still point at npr.org. UNVERIFIED from the dev sandbox
-  # (no egress): run check_feeds and watch for "gate rejected [...]: NPR".
-  - id: npr
-    name: "NPR"
-    section: world
-    kind: rss
-    url: "https://feeds.npr.org/1001/rss.xml"
-    max_items: 6
-    extract: trafilatura
-    extract_from: npr_text
-
-  - id: dw
-    name: "Deutsche Welle"
-    section: world
-    kind: rss
-    url: "https://rss.dw.com/rdf/rss-en-all"
-    max_items: 6
-    extract: trafilatura
-
-  # --- Technology --------------------------------------------------------
-  - id: theverge
-    name: "The Verge"
-    section: technology
-    kind: rss
-    url: "https://www.theverge.com/rss/index.xml"
-    max_items: 8
-    extract: trafilatura
-
-  - id: daringfireball
-    name: "Daring Fireball"
-    section: technology
-    kind: rss
-    url: "https://daringfireball.net/feeds/main"
-    max_items: 6
-    extract: feed   # full text is in the feed; linked-list items point off-site so never scrape them.
-
-  # --- Analysis --------------------------------------------------------
-  - id: conversation-au
-    name: "The Conversation"
-    section: analysis
-    kind: rss
-    url: "https://theconversation.com/au/articles.atom"
-    max_items: 8
-    extract: trafilatura
-    licence: cc-by-nd        # the one source safe to reproduce in full
-
-  # 2026-09-28: disabled. Owner: "not helpful" — recipes removed as a
-  # feature entirely (see models.py section list, templates/paper.typ).
-  # - id: recipetin
-  #   name: "RecipeTin Eats"
-  #   section: kitchen
-  #   kind: rss
-  #   url: "https://www.recipetineats.com/feed/"
-  #   max_items: 3
-  #   window_hours: 720   # posts a few times a week; take the latest from the past month
-  #   extract: trafilatura
-  #   treatment: recipe        # ingredients in full, method behind a QR code
-
+# "The Chatter" page. Leave `subs` empty for no Reddit at all.
 reddit:
   # Measured 2026-09-28: unauthenticated reddit .rss responses carry
   # x-ratelimit-used: 1, x-ratelimit-remaining: 0.0, x-ratelimit-reset: <=60 —
@@ -152,7 +55,14 @@ reddit:
   # Irrelevant for a once-daily build: fetch sequentially with a pause.
   delay_sec: 65
   subs:
+    # sort: top | hot | new. t: hour | day | week. keep: how many reach the paper.
     - {sub: "australia",   sort: top, t: day, limit: 40, keep: 4}
     - {sub: "AusFinance",  sort: top, t: day, limit: 40, keep: 3}
     - {sub: "energy",      sort: top, t: day, limit: 40, keep: 3}
     - {sub: "singularity", sort: top, t: day, limit: 40, keep: 3}
+
+# Optional. Omit to use the built-ins in src/sources.py.
+# defaults:
+#   user_agent: "scribe-daily/1.0 (personal e-reader digest)"
+#   per_domain_delay_sec: 1.0
+#   request_timeout_sec: 20

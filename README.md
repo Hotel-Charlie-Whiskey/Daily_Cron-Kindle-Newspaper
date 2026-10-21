@@ -34,23 +34,25 @@ publishers moved, rather than rebuilding the paper from scratch every day.
    timezone, what counts as local, anything to drop. Then set the crons in
    `.github/workflows/daily.yml` to 05:40 your time in UTC (one per UTC
    offset if you have DST) and list each against its offset in `SCHEDULES`.
-   `config/feeds.yaml` and `config/topics.yaml` are one reader's choices —
-   make them yours.
-3. **Subscription token** — install Claude Code, sign in with your Pro account,
+3. **Sources** — edit `config/feeds.yaml`. It ships with one reader's
+   choices; replace them with yours (see [Choosing your sources](#choosing-your-sources)).
+   `config/topics.yaml` is the same kind of choice for the live searches —
+   rewrite its topics and queries too.
+4. **Subscription token** — install Claude Code, sign in with your Pro account,
    then run `claude setup-token`. It prints a portable `sk-ant-oat01-…` token.
    Store it as the repo secret `CLAUDE_CODE_OAUTH_TOKEN`. This is what lets the
    pipeline draw on your subscription instead of an API account.
-4. **Guardian key** — register at `open-platform.theguardian.com/access` for a
+5. **Guardian key** — register at `open-platform.theguardian.com/access` for a
    free developer key. This is the difference between scraping the Guardian and
    being handed full body text with metadata.
-5. **Kindle email** — Manage Your Content & Devices → Preferences → Personal
+6. **Kindle email** — Manage Your Content & Devices → Preferences → Personal
    Document Settings. Copy your `@kindle.com` address and add your sending
    address to the Approved Personal Document E-mail List.
-6. **Secrets** — add `CLAUDE_CODE_OAUTH_TOKEN`, `GUARDIAN_API_KEY`, `SMTP_HOST`,
+7. **Secrets** — add `CLAUDE_CODE_OAUTH_TOKEN`, `GUARDIAN_API_KEY`, `SMTP_HOST`,
    `SMTP_USER`, `SMTP_PASS`, `KINDLE_EMAIL` to the repo.
-7. **Verify feeds** — `python scripts/check_feeds.py`. Expect one or two to be
+8. **Verify feeds** — `python scripts/check_feeds.py`. Expect one or two to be
    stale; fix them before the first real run.
-8. **Dry run** — `python src/build.py --dry-run --no-edit` builds the PDF
+9. **Dry run** — `python src/build.py --dry-run --no-edit` builds the PDF
    without touching your quota. Check it on the device, then drop `--no-edit`.
 
 ## Decisions worth knowing
@@ -121,11 +123,50 @@ missing, malformed JSON — `edit.mechanical_plan` builds a plain edition from
 published summaries and prints the reason on the front page. A dull paper beats
 an empty inbox.
 
-## Sources
+## Choosing your sources
+
+Sources live in two files:
+
+- **`config/feeds.yaml` — your selection.** The only file you need to edit.
+  A list of source ids, plus the subreddits for The Chatter.
+- **`config/catalogue.yaml` — the library.** Definitions for sources that are
+  known to read well: feed URL, extraction route, licence and per-site quirks
+  (NPR extracted via text.npr.org, the Guardian via its API). Nothing in it is
+  fetched unless `feeds.yaml` selects it.
+
+Each entry in `feeds.yaml` is one of:
+
+```yaml
+sources:
+  - bbc-world                 # a catalogue source, as-is
+
+  - id: theverge              # a catalogue source with your overrides
+    section: tech
+    max_items: 4
+
+  - id: my-local-paper        # your own source, defined in full
+    name: "The Local Paper"
+    section: local
+    kind: rss                 # rss | guardian_api
+    url: "https://example.com/feed/"
+    max_items: 8
+    extract: trafilatura      # or `feed` when the feed carries the full text
+```
+
+`section` is a free label the editor sees when grouping and ranking: use any
+words that suit your paper, except `radar` and `reddit`. A typo'd id, a
+duplicate, a missing field or a reserved section stops the build with a
+message naming the source. The field reference is at the top of
+`config/catalogue.yaml`. Run `python scripts/check_feeds.py` after any change.
+
+If you add a source that works well, consider adding it to the catalogue in
+your own copy, so the know-how stays in one place.
+
+### The shipped selection
 
 ABC News · Guardian Australia (API, full text) · Pulse Tasmania · BBC World ·
 NPR (extracted via text.npr.org) · AP and Reuters (not available, see
-`config/feeds.yaml`) · Al Jazeera · Deutsche Welle · The Verge ·
+`config/catalogue.yaml`) · Al Jazeera · Deutsche Welle · The Verge ·
 Daring Fireball (full-text feed) ·
 The Conversation (CC BY-ND) ·
 r/australia, r/AusFinance, r/energy, r/singularity
@@ -140,7 +181,9 @@ disasters · world news and global politics (Saturdays only). Each runs live sea
 | Path | Does |
 |---|---|
 | `config/reader.yaml` | Who the paper is for: persona, timezone, proximity, exclusions |
-| `config/feeds.yaml` | Source registry |
+| `config/feeds.yaml` | Your sources: catalogue ids, overrides, your own feeds, subreddits |
+| `config/catalogue.yaml` | Source library: known-good definitions and per-site quirks |
+| `src/sources.py` | Resolves and validates `feeds.yaml` against the catalogue |
 | `config/topics.yaml` | Beats and their search queries |
 | `src/fetch.py` | RSS, Guardian API, Reddit, topic search |
 | `src/extract.py` | trafilatura → readability → gate → cache |

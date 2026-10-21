@@ -23,7 +23,7 @@ def canonical(url: str) -> str:
 class Article:
     source_id: str
     source_name: str
-    section: str            # australia | world | technology | analysis | reddit | radar
+    section: str            # the source's label from feeds.yaml, or reddit | radar
     title: str
     url: str
     published: Optional[datetime] = None

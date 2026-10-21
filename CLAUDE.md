@@ -6,7 +6,9 @@ unattended at 05:40 in the reader's timezone (`config/reader.yaml`).
 ## Rules
 
 - **Never widen the source list without being asked.** Sources are a
-  deliberate editorial choice, not a coverage problem to be solved.
+  deliberate editorial choice, not a coverage problem to be solved. The
+  selection is `config/feeds.yaml`; `config/catalogue.yaml` only holds
+  definitions, so adding a catalogue entry is not enabling it.
 - **Never remove the quality gate in `extract.py`** to raise the article count.
   A thin paper is a signal; a paper full of nav chrome is a broken one.
 - **Never commit `out/` or `build/`.** The repo stays private and stays free of
@@ -23,6 +25,8 @@ unattended at 05:40 in the reader's timezone (`config/reader.yaml`).
   extracted article bodies to it.
 - Prefer publisher APIs to scraping. The Guardian has one; check whether others
   have added one before writing an extractor.
+- Fix a catalogue source's URL in `config/catalogue.yaml`, not with an override
+  in `feeds.yaml`; a source defined in full in `feeds.yaml` is fixed there.
 - When a feed dies, comment it out with a dated note. Don't guess a replacement
   URL — a wrong feed that returns valid XML is worse than a missing one.
 
@@ -33,6 +37,7 @@ unattended at 05:40 in the reader's timezone (`config/reader.yaml`).
 | Build fails on extraction health check | A site changed markup, or blocked the UA |
 | Reddit items missing | 429 throttle; ~1 req/min per client (IP/UA), not per feed |
 | PDF over 45 MB | Undithered images — check `_prepare_image` |
+| Build stops on `config/feeds.yaml: ...` | Selection doesn't resolve — unknown id, duplicate, missing field, or a reserved section (`radar`/`reddit`). See `src/sources.py` |
 | Links dead on device | Label emitted for an article with no full-text page |
 | Paper doesn't arrive on a schedule day | Check the `gate` job's offset/cron match — one cron per UTC offset covers DST, and only the one `SCHEDULES` pairs with the reader's live offset runs |
 | Front page says "Automatic edition" | Editorial pass failed; reason is printed inline and the transcript is in the run artifacts |

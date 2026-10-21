@@ -1,0 +1,160 @@
+# Source catalogue — every source this pipeline knows how to read well.
+#
+# Nothing here is fetched on its own. The paper reads only what
+# config/feeds.yaml selects, by id. This file holds the per-publisher
+# know-how (feed URL, extraction route, licence, quirks) so that picking a
+# source is one line in feeds.yaml rather than rediscovering why NPR needs
+# text.npr.org.
+#
+# Each entry's `section` is a default label for the editor, not a fixed
+# category: override it in feeds.yaml to suit your paper (ABC might be
+# "local" for one reader and "world" for another). Any word works except
+# `radar` and `reddit`, which the pipeline reserves.
+#
+# Fields:
+#   id, name, section, kind      required. kind: rss | guardian_api
+#   url                          required for rss
+#   max_items                    default 10
+#   window_hours                 rss only: ignore items older than this (default 30)
+#   extract                      trafilatura (fetch the page) | feed (full text is in the feed)
+#   extract_from                 rewrite the page fetched for extraction (npr_text)
+#   licence                      default all-rights-reserved
+#   treatment                    article | link
+#   sections                     guardian_api only: Guardian sectionIds to pull, "|"-separated
+#   section_map                  guardian_api only: Guardian sectionId -> your section
+#
+# VERIFY BEFORE FIRST RUN:  python scripts/check_feeds.py
+# Publishers move feed URLs without notice. When a feed dies, comment it out
+# here with a dated note — don't guess a replacement URL.
+
+sources:
+  # --- Australia -------------------------------------------------------
+  - id: abc-au
+    name: "ABC News"
+    section: australia
+    kind: rss
+    url: "https://www.abc.net.au/news/feed/51120/rss.xml"   # "Just In"
+    max_items: 14
+    extract: trafilatura
+
+  - id: guardian-au
+    name: "The Guardian Australia"
+    section: australia
+    kind: guardian_api        # full body text via Open Platform, no scraping
+    max_items: 14
+    sections: "australia-news|business|environment|world|technology"
+    # The sections above cover more than Australia, so this source also
+    # carries UK/world stories (Heathrow, the Pope) — file those by Guardian
+    # sectionId instead of dumping everything under australia. Unmapped
+    # sectionIds (business, environment) fall through to `section` above.
+    section_map:
+      world: world
+      technology: technology
+
+  # 2026-09-29: Hobart-based, independent, free to read. Its URLs
+  # (/news/author/…, /news/region/…) look like WordPress, so this is
+  # WordPress's standard site feed — UNVERIFIED from the dev sandbox (no
+  # egress): run check_feeds before trusting it. If it 404s, comment it out
+  # rather than guessing another URL.
+  - id: pulse-tas
+    name: "Pulse Tasmania"
+    section: australia
+    kind: rss
+    url: "https://pulsetasmania.com.au/feed/"
+    max_items: 8
+    extract: trafilatura
+
+  # 2026-09-29: Reuters not available. It dropped its public RSS in June
+  # 2020, reuters.com is bot-gated, and it has no free API. Google News
+  # "source:reuters" links are redirects that can't be extracted, so it could
+  # only ever be headlines. Revisit if that changes.
+
+  # --- World -----------------------------------------------------------
+  - id: bbc-world
+    name: "BBC News"
+    section: world
+    kind: rss
+    url: "https://feeds.bbci.co.uk/news/world/rss.xml"
+    max_items: 10
+    extract: trafilatura
+
+  # 2026-09-28: disabled. rsshub.app mirror returns 403; AP's own
+  # apnews.com/index.rss is bot-gated (401/403) and AP offers no free API.
+  # No first-party replacement exists.
+  # - id: ap-top
+  #   name: "AP News"
+  #   section: world
+  #   kind: rss
+  #   url: "https://rsshub.app/apnews/topics/apf-topnews"
+  #   max_items: 8
+  #   extract: trafilatura
+
+  - id: aljazeera
+    name: "Al Jazeera English"
+    section: world
+    kind: rss
+    url: "https://www.aljazeera.com/xml/rss/all.xml"
+    max_items: 8
+    extract: trafilatura
+
+  # 2026-09-29: link density is measured over the whole fetched page, and
+  # npr.org's page is mostly nav, so every story was gated as "boilerplate".
+  # Rather than loosen the gate, extraction fetches the same story from
+  # text.npr.org — NPR's own text-only edition, which has almost no chrome —
+  # while links and QR codes still point at npr.org. UNVERIFIED from the dev
+  # sandbox (no egress): run check_feeds and watch for "gate rejected [...]: NPR".
+  - id: npr
+    name: "NPR"
+    section: world
+    kind: rss
+    url: "https://feeds.npr.org/1001/rss.xml"
+    max_items: 6
+    extract: trafilatura
+    extract_from: npr_text
+
+  - id: dw
+    name: "Deutsche Welle"
+    section: world
+    kind: rss
+    url: "https://rss.dw.com/rdf/rss-en-all"
+    max_items: 6
+    extract: trafilatura
+
+  # --- Technology --------------------------------------------------------
+  - id: theverge
+    name: "The Verge"
+    section: technology
+    kind: rss
+    url: "https://www.theverge.com/rss/index.xml"
+    max_items: 8
+    extract: trafilatura
+
+  - id: daringfireball
+    name: "Daring Fireball"
+    section: technology
+    kind: rss
+    url: "https://daringfireball.net/feeds/main"
+    max_items: 6
+    extract: feed   # full text is in the feed; linked-list items point off-site so never scrape them.
+
+  # --- Analysis --------------------------------------------------------
+  - id: conversation-au
+    name: "The Conversation"
+    section: analysis
+    kind: rss
+    url: "https://theconversation.com/au/articles.atom"
+    max_items: 8
+    extract: trafilatura
+    licence: cc-by-nd        # the one source safe to reproduce in full
+
+  # 2026-09-28: disabled. Recipes were removed as a feature entirely (see
+  # templates/paper.typ) — the `recipe` treatment no longer renders.
+  # - id: recipetin
+  #   name: "RecipeTin Eats"
+  #   section: kitchen
+  #   kind: rss
+  #   url: "https://www.recipetineats.com/feed/"
+  #   max_items: 3
+  #   window_hours: 720   # posts a few times a week; take the latest from the past month
+  #   extract: trafilatura
+  #   treatment: recipe        # ingredients in full, method behind a QR code

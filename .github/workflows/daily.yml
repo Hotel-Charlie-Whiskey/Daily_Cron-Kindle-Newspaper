@@ -231,6 +231,8 @@ jobs:
           claude_args: "--model claude-sonnet-5 --max-turns 12"
           prompt: >
             Read feed-report.txt. For each failing feed, find the publisher's
-            current feed URL, update config/feeds.yaml, and open a PR titled
-            "fix: feed URLs". If a publisher has removed feeds entirely, comment
-            the entry out and say so in the PR body rather than guessing.
+            current feed URL and fix it where the source is defined:
+            config/catalogue.yaml for a catalogue id, config/feeds.yaml for a
+            source defined in full there. Open a PR titled "fix: feed URLs".
+            If a publisher has removed feeds entirely, comment the entry out
+            and say so in the PR body rather than guessing.

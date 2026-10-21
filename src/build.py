@@ -23,7 +23,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-import deliver, edit, extract, fetch, reader, render, weekend  # noqa: E402
+import deliver, edit, extract, fetch, reader, render, sources, weekend  # noqa: E402
 from models import Article, canonical                 # noqa: E402
 
 SEEN = Path("state/seen.json")
@@ -98,7 +98,7 @@ def main() -> int:
 
     load_dotenv()
 
-    feeds = yaml.safe_load(Path("config/feeds.yaml").read_text(encoding="utf-8"))
+    feeds = sources.load()
     topics = yaml.safe_load(Path("config/topics.yaml").read_text(encoding="utf-8"))
     defaults = feeds["defaults"]
     today = datetime.now(reader.tz())
